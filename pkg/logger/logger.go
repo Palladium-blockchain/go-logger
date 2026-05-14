@@ -1,82 +1,93 @@
 package logger
 
 import (
-	"fmt"
-	"log"
+	"io"
+	"os"
+
+	"github.com/Palladium-blockchain/go-logger/pkg/core"
+	"github.com/Palladium-blockchain/go-logger/pkg/format/plain"
+	"github.com/Palladium-blockchain/go-logger/pkg/iox"
 )
 
 type Logger interface {
-	Debug(msg string, fields ...*Field)
-	Info(msg string, fields ...*Field)
-	Warn(msg string, fields ...*Field)
-	Error(msg string, fields ...*Field)
+	Debug(msg string, fields ...core.Field)
+	Info(msg string, fields ...core.Field)
+	Warn(msg string, fields ...core.Field)
+	Error(msg string, fields ...core.Field)
 }
 
-func New() Logger {
-	return &logger{}
+type Option func(logger *logger)
+
+func WithFormatter(formatter core.Formatter) Option {
+	return func(logger *logger) {
+		logger.formatter = formatter
+	}
+}
+
+func WithLockingWriter(writer io.Writer) Option {
+	return func(logger *logger) {
+		logger.writer = writer
+	}
+}
+
+func WithWriter(writer core.Writer) Option {
+	return func(logger *logger) {
+		logger.writer = writer
+	}
+}
+
+func New(opts ...Option) Logger {
+	l := &logger{
+		writer:    iox.NewLockingWriter(os.Stdout),
+		formatter: &plain.Formatter{},
+	}
+
+	for _, opt := range opts {
+		opt(l)
+	}
+
+	return l
 }
 
 type logger struct {
+	formatter core.Formatter
+	writer    core.Writer
 }
 
-func (_ *logger) Debug(msg string, fields ...*Field) {
-	Debug(msg, fields...)
+func (l *logger) Debug(msg string, fields ...core.Field) {
+	l.write(core.Record{
+		Level:   core.Debug,
+		Message: msg,
+		Fields:  fields,
+	})
 }
 
-func (_ *logger) Info(msg string, fields ...*Field) {
-	Info(msg, fields...)
+func (l *logger) Info(msg string, fields ...core.Field) {
+	l.write(core.Record{
+		Level:   core.Info,
+		Message: msg,
+		Fields:  fields,
+	})
 }
 
-func (_ *logger) Warn(msg string, fields ...*Field) {
-	Warn(msg, fields...)
+func (l *logger) Warn(msg string, fields ...core.Field) {
+	l.write(core.Record{
+		Level:   core.Warn,
+		Message: msg,
+		Fields:  fields,
+	})
 }
 
-func (_ *logger) Error(msg string, fields ...*Field) {
-	Error(msg, fields...)
+func (l *logger) Error(msg string, fields ...core.Field) {
+	l.write(core.Record{
+		Level:   core.Error,
+		Message: msg,
+		Fields:  fields,
+	})
 }
 
-type LogLevel int
-
-const (
-	DEBUG LogLevel = iota
-	INFO
-	WARNING
-	ERROR
-)
-
-type Field struct {
-	Key   string
-	Value any
-}
-
-func WithField(key string, value any) *Field {
-	return &Field{Key: key, Value: value}
-}
-
-func WithError(err error) *Field {
-	return &Field{Key: "error", Value: err}
-}
-
-func Debug(msg string, fields ...*Field) {
-	l(DEBUG, msg, fields...)
-}
-
-func Info(msg string, fields ...*Field) {
-	l(INFO, msg, fields...)
-}
-
-func Warn(msg string, fields ...*Field) {
-	l(WARNING, msg, fields...)
-}
-
-func Error(msg string, fields ...*Field) {
-	l(ERROR, msg, fields...)
-}
-
-func l(levelLevel LogLevel, msg string, fields ...*Field) {
-	rec := msg
-	for _, field := range fields {
-		rec += " " + field.Key + ": " + fmt.Sprintf("%v", field.Value)
-	}
-	log.Println(rec)
+func (l *logger) write(record core.Record) {
+	// TODO: implement error handling
+	bytes, _ := l.formatter.Format(record)
+	_, _ = l.writer.Write(bytes)
 }
