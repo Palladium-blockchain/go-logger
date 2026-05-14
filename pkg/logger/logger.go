@@ -26,7 +26,7 @@ func WithFormatter(formatter core.Formatter) Option {
 
 func WithLockingWriter(writer io.Writer) Option {
 	return func(logger *logger) {
-		logger.writer = writer
+		logger.writer = iox.NewLockingWriter(writer)
 	}
 }
 
