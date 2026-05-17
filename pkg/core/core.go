@@ -1,5 +1,7 @@
 package core
 
+import "io"
+
 type Level string
 
 const (
@@ -20,8 +22,8 @@ type Record struct {
 	Fields  []Field
 }
 
-type Formatter interface {
-	Format(record Record) ([]byte, error)
+type Encoder interface {
+	Encode(w io.Writer, record Record) error
 }
 
 type Writer interface {

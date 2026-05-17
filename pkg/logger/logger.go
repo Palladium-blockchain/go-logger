@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/Palladium-blockchain/go-logger/pkg/core"
-	"github.com/Palladium-blockchain/go-logger/pkg/format/plain"
+	"github.com/Palladium-blockchain/go-logger/pkg/encoder/plain"
 	"github.com/Palladium-blockchain/go-logger/pkg/iox"
 )
 
@@ -18,9 +18,9 @@ type Logger interface {
 
 type Option func(logger *logger)
 
-func WithFormatter(formatter core.Formatter) Option {
+func WithEncoder(encoder core.Encoder) Option {
 	return func(logger *logger) {
-		logger.formatter = formatter
+		logger.encoder = encoder
 	}
 }
 
@@ -36,10 +36,16 @@ func WithWriter(writer core.Writer) Option {
 	}
 }
 
+func WithErrorHandler(handlerFn func(error)) Option {
+	return func(logger *logger) {
+		logger.errorHandler = handlerFn
+	}
+}
+
 func New(opts ...Option) Logger {
 	l := &logger{
-		writer:    iox.NewLockingWriter(os.Stdout),
-		formatter: &plain.Formatter{},
+		writer:  iox.NewLockingWriter(os.Stdout),
+		encoder: plain.NewEncoder(),
 	}
 
 	for _, opt := range opts {
@@ -50,8 +56,9 @@ func New(opts ...Option) Logger {
 }
 
 type logger struct {
-	formatter core.Formatter
-	writer    core.Writer
+	encoder      core.Encoder
+	writer       core.Writer
+	errorHandler func(error)
 }
 
 func (l *logger) Debug(msg string, fields ...core.Field) {
@@ -87,7 +94,7 @@ func (l *logger) Error(msg string, fields ...core.Field) {
 }
 
 func (l *logger) write(record core.Record) {
-	// TODO: implement error handling
-	bytes, _ := l.formatter.Format(record)
-	_, _ = l.writer.Write(bytes)
+	if err := l.encoder.Encode(l.writer, record); err != nil && l.errorHandler != nil {
+		l.errorHandler(err)
+	}
 }

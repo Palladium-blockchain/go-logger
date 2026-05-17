@@ -2,6 +2,7 @@ package logger_test
 
 import (
 	"bytes"
+	"io"
 	"reflect"
 	"testing"
 
@@ -9,17 +10,18 @@ import (
 	"github.com/Palladium-blockchain/go-logger/pkg/logger"
 )
 
-type recordingFormatter struct {
+type recordingEncoder struct {
 	records []core.Record
 	output  []byte
 }
 
-func (f *recordingFormatter) Format(record core.Record) ([]byte, error) {
-	f.records = append(f.records, record)
-	return f.output, nil
+func (e *recordingEncoder) Encode(w io.Writer, record core.Record) error {
+	e.records = append(e.records, record)
+	_, err := w.Write(e.output)
+	return err
 }
 
-func TestLoggerMethodsFormatExpectedRecords(t *testing.T) {
+func TestLoggerMethodsEncodeExpectedRecords(t *testing.T) {
 	tests := []struct {
 		name  string
 		level core.Level
@@ -49,10 +51,10 @@ func TestLoggerMethodsFormatExpectedRecords(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			formatter := &recordingFormatter{output: []byte("formatted log")}
+			encoder := &recordingEncoder{output: []byte("formatted log")}
 			var writer bytes.Buffer
 			log := logger.New(
-				logger.WithFormatter(formatter),
+				logger.WithEncoder(encoder),
 				logger.WithWriter(&writer),
 			)
 			fields := []core.Field{
@@ -65,8 +67,8 @@ func TestLoggerMethodsFormatExpectedRecords(t *testing.T) {
 			if got, want := writer.String(), "formatted log"; got != want {
 				t.Fatalf("writer got %q, want %q", got, want)
 			}
-			if got, want := len(formatter.records), 1; got != want {
-				t.Fatalf("formatter got %d records, want %d", got, want)
+			if got, want := len(encoder.records), 1; got != want {
+				t.Fatalf("encoder got %d records, want %d", got, want)
 			}
 
 			want := core.Record{
@@ -74,18 +76,18 @@ func TestLoggerMethodsFormatExpectedRecords(t *testing.T) {
 				Message: "node started",
 				Fields:  fields,
 			}
-			if !reflect.DeepEqual(formatter.records[0], want) {
-				t.Fatalf("formatter record = %#v, want %#v", formatter.records[0], want)
+			if !reflect.DeepEqual(encoder.records[0], want) {
+				t.Fatalf("encoder record = %#v, want %#v", encoder.records[0], want)
 			}
 		})
 	}
 }
 
 func TestNewUsesConfiguredWriter(t *testing.T) {
-	formatter := &recordingFormatter{output: []byte("custom output")}
+	encoder := &recordingEncoder{output: []byte("custom output")}
 	var writer bytes.Buffer
 	log := logger.New(
-		logger.WithFormatter(formatter),
+		logger.WithEncoder(encoder),
 		logger.WithLockingWriter(&writer),
 	)
 

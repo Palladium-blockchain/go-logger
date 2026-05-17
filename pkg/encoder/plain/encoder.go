@@ -3,15 +3,28 @@ package plain
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 
+	"github.com/Palladium-blockchain/go-logger/internal/syncx"
 	"github.com/Palladium-blockchain/go-logger/pkg/core"
 )
 
-type Formatter struct{}
+type Encoder struct {
+	pool *syncx.Pool[*bytes.Buffer]
+}
 
-func (f *Formatter) Format(record core.Record) ([]byte, error) {
-	var b bytes.Buffer
+func NewEncoder() *Encoder {
+	return &Encoder{
+		pool: syncx.NewPool(func() *bytes.Buffer {
+			return new(bytes.Buffer)
+		}),
+	}
+}
+
+func (e *Encoder) Encode(w io.Writer, record core.Record) error {
+	b := e.pool.Get()
+	defer e.pool.Put(b)
 
 	b.WriteString(string(record.Level))
 	b.WriteString(" | ")
@@ -21,18 +34,22 @@ func (f *Formatter) Format(record core.Record) ([]byte, error) {
 		b.WriteString(" ")
 		b.WriteString(field.Key)
 		b.WriteString(": ")
-		if err := f.formatAny(&b, field.Value); err != nil {
-			b.WriteString("<not-formattable>")
+		if err := e.encodeAny(b, field.Value); err != nil {
+			b.WriteString("<not-encodable>")
 		}
 		b.WriteString(" ")
 	}
 
 	b.WriteString("\n")
 
-	return b.Bytes(), nil
+	_, err := w.Write(b.Bytes())
+
+	b.Reset()
+
+	return err
 }
 
-func (f *Formatter) formatAny(b *bytes.Buffer, v any) error {
+func (e *Encoder) encodeAny(b *bytes.Buffer, v any) error {
 	switch x := v.(type) {
 	case nil:
 		b.WriteString("<nil>")
