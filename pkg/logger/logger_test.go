@@ -97,3 +97,48 @@ func TestNewUsesConfiguredWriter(t *testing.T) {
 		t.Fatalf("writer got %q, want %q", got, want)
 	}
 }
+
+func TestWithLogLevelFiltersLowerPriorityRecords(t *testing.T) {
+	encoder := &recordingEncoder{output: []byte("record\n")}
+	var writer bytes.Buffer
+	log := logger.New(
+		logger.WithEncoder(encoder),
+		logger.WithWriter(&writer),
+		logger.WithLogLevel(core.Warn),
+	)
+
+	log.Debug("debug")
+	log.Info("info")
+	log.Warn("warn")
+	log.Error("error")
+
+	if got, want := writer.String(), "record\nrecord\n"; got != want {
+		t.Fatalf("writer got %q, want %q", got, want)
+	}
+	if got, want := len(encoder.records), 2; got != want {
+		t.Fatalf("encoder got %d records, want %d", got, want)
+	}
+
+	wantLevels := []core.Level{core.Warn, core.Error}
+	for i, want := range wantLevels {
+		if got := encoder.records[i].Level; got != want {
+			t.Fatalf("record %d level = %q, want %q", i, got, want)
+		}
+	}
+}
+
+func TestWithLogLevelIgnoresUnknownLevel(t *testing.T) {
+	encoder := &recordingEncoder{output: []byte("record")}
+	var writer bytes.Buffer
+	log := logger.New(
+		logger.WithEncoder(encoder),
+		logger.WithWriter(&writer),
+		logger.WithLogLevel(core.Level("unknown")),
+	)
+
+	log.Debug("debug")
+
+	if got, want := len(encoder.records), 1; got != want {
+		t.Fatalf("encoder got %d records, want %d", got, want)
+	}
+}

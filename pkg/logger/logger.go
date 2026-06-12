@@ -42,10 +42,19 @@ func WithErrorHandler(handlerFn func(error)) Option {
 	}
 }
 
+func WithLogLevel(level core.Level) Option {
+	return func(logger *logger) {
+		if _, ok := levelPriority(level); ok {
+			logger.logLevel = level
+		}
+	}
+}
+
 func New(opts ...Option) Logger {
 	l := &logger{
-		writer:  iox.NewLockingWriter(os.Stdout),
-		encoder: plain.NewEncoder(),
+		writer:   iox.NewLockingWriter(os.Stdout),
+		encoder:  plain.NewEncoder(),
+		logLevel: core.Debug,
 	}
 
 	for _, opt := range opts {
@@ -58,6 +67,7 @@ func New(opts ...Option) Logger {
 type logger struct {
 	encoder      core.Encoder
 	writer       core.Writer
+	logLevel     core.Level
 	errorHandler func(error)
 }
 
@@ -94,7 +104,40 @@ func (l *logger) Error(msg string, fields ...core.Field) {
 }
 
 func (l *logger) write(record core.Record) {
+	if !l.shouldWrite(record.Level) {
+		return
+	}
+
 	if err := l.encoder.Encode(l.writer, record); err != nil && l.errorHandler != nil {
 		l.errorHandler(err)
+	}
+}
+
+func (l *logger) shouldWrite(level core.Level) bool {
+	recordPriority, ok := levelPriority(level)
+	if !ok {
+		return true
+	}
+
+	logPriority, ok := levelPriority(l.logLevel)
+	if !ok {
+		return true
+	}
+
+	return recordPriority >= logPriority
+}
+
+func levelPriority(level core.Level) (int, bool) {
+	switch level {
+	case core.Debug:
+		return 0, true
+	case core.Info:
+		return 1, true
+	case core.Warn:
+		return 2, true
+	case core.Error:
+		return 3, true
+	default:
+		return 0, false
 	}
 }
