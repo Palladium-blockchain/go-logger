@@ -3,6 +3,7 @@ package logger
 import (
 	"io"
 	"os"
+	"sync/atomic"
 
 	"github.com/Palladium-blockchain/go-logger/pkg/core"
 	"github.com/Palladium-blockchain/go-logger/pkg/encoder/plain"
@@ -14,6 +15,7 @@ type Logger interface {
 	Info(msg string, fields ...core.Field)
 	Warn(msg string, fields ...core.Field)
 	Error(msg string, fields ...core.Field)
+	SetLevel(level core.Level)
 }
 
 type Option func(logger *logger)
@@ -44,18 +46,16 @@ func WithErrorHandler(handlerFn func(error)) Option {
 
 func WithLogLevel(level core.Level) Option {
 	return func(logger *logger) {
-		if _, ok := levelPriority(level); ok {
-			logger.logLevel = level
-		}
+		logger.SetLevel(level)
 	}
 }
 
 func New(opts ...Option) Logger {
 	l := &logger{
-		writer:   iox.NewLockingWriter(os.Stdout),
-		encoder:  plain.NewEncoder(),
-		logLevel: core.Debug,
+		writer:  iox.NewLockingWriter(os.Stdout),
+		encoder: plain.NewEncoder(),
 	}
+	l.SetLevel(core.Debug)
 
 	for _, opt := range opts {
 		opt(l)
@@ -67,7 +67,7 @@ func New(opts ...Option) Logger {
 type logger struct {
 	encoder      core.Encoder
 	writer       core.Writer
-	logLevel     core.Level
+	logLevel     atomic.Int32
 	errorHandler func(error)
 }
 
@@ -103,6 +103,15 @@ func (l *logger) Error(msg string, fields ...core.Field) {
 	})
 }
 
+func (l *logger) SetLevel(level core.Level) {
+	priority, ok := levelPriority(level)
+	if !ok {
+		return
+	}
+
+	l.logLevel.Store(priority)
+}
+
 func (l *logger) write(record core.Record) {
 	if !l.shouldWrite(record.Level) {
 		return
@@ -119,15 +128,10 @@ func (l *logger) shouldWrite(level core.Level) bool {
 		return true
 	}
 
-	logPriority, ok := levelPriority(l.logLevel)
-	if !ok {
-		return true
-	}
-
-	return recordPriority >= logPriority
+	return recordPriority >= l.logLevel.Load()
 }
 
-func levelPriority(level core.Level) (int, bool) {
+func levelPriority(level core.Level) (int32, bool) {
 	switch level {
 	case core.Debug:
 		return 0, true

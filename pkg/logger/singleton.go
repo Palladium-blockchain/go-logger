@@ -21,3 +21,7 @@ func Warn(msg string, fields ...core.Field) {
 func Error(msg string, fields ...core.Field) {
 	stdLogger.Error(msg, fields...)
 }
+
+func SetLevel(level core.Level) {
+	stdLogger.SetLevel(level)
+}

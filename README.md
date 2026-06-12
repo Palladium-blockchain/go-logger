@@ -80,7 +80,7 @@ Available options:
 | `logger.WithWriter(writer)` | Sets the writer directly. Use this when the writer already handles synchronization. |
 | `logger.WithLockingWriter(writer)` | Wraps an `io.Writer` with a mutex-protected writer for concurrent logging. |
 | `logger.WithErrorHandler(handlerFn)` | Sets a callback for encoder or writer errors. |
-| `logger.WithLogLevel(level)` | Sets the minimum level to write. Lower-priority records are skipped. |
+| `logger.WithLogLevel(level)` | Sets the initial minimum level to write. Lower-priority records are skipped. |
 
 ## Fields
 
@@ -214,3 +214,13 @@ log.Info("skipped")
 log.Warn("written")
 log.Error("written")
 ```
+
+Use `SetLevel` to change the minimum level later:
+
+```go
+log.SetLevel(core.Error)
+log.Warn("skipped")
+log.Error("written")
+```
+
+For the package-level logger, use `logger.SetLevel(core.Error)`.

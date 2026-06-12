@@ -127,6 +127,34 @@ func TestWithLogLevelFiltersLowerPriorityRecords(t *testing.T) {
 	}
 }
 
+func TestSetLevelUpdatesMinimumLevel(t *testing.T) {
+	encoder := &recordingEncoder{output: []byte("record\n")}
+	var writer bytes.Buffer
+	log := logger.New(
+		logger.WithEncoder(encoder),
+		logger.WithWriter(&writer),
+	)
+
+	log.Info("before level change")
+	log.SetLevel(core.Error)
+	log.Info("after level change")
+	log.Error("error")
+
+	if got, want := writer.String(), "record\nrecord\n"; got != want {
+		t.Fatalf("writer got %q, want %q", got, want)
+	}
+	if got, want := len(encoder.records), 2; got != want {
+		t.Fatalf("encoder got %d records, want %d", got, want)
+	}
+
+	wantLevels := []core.Level{core.Info, core.Error}
+	for i, want := range wantLevels {
+		if got := encoder.records[i].Level; got != want {
+			t.Fatalf("record %d level = %q, want %q", i, got, want)
+		}
+	}
+}
+
 func TestWithLogLevelIgnoresUnknownLevel(t *testing.T) {
 	encoder := &recordingEncoder{output: []byte("record")}
 	var writer bytes.Buffer
